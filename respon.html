@@ -131,36 +131,38 @@
             }
         }
 
-        async function submitUpdate() {
-            const btn = document.getElementById('btnSubmit');
-            const selectedID = document.getElementById('selectTicket').value;
-            const eta = document.getElementById('inputEta').value;
-            const note = document.getElementById('inputNote').value;
-            const extra = document.getElementById('additionalNote').value;
+async function submitUpdate() {
+    const btn = document.getElementById('btnSubmit');
+    const selectedID = document.getElementById('selectTicket').value;
+    const eta = document.getElementById('inputEta').value;
+    const note = document.getElementById('inputNote').value;
+    const extra = document.getElementById('additionalNote').value;
 
-            if (!eta) return alert("Jam estimasi wajib diisi!");
+    if (!eta) return alert("Jam estimasi wajib diisi!");
 
-            btn.disabled = true;
-            btn.innerText = "MENGIRIM...";
+    btn.disabled = true;
+    btn.innerHTML = `<span class="animate-spin">⏳</span> MENGIRIM...`;
 
-            try {
-                // MENGGUNAKAN SET MERGE agar data tidak tertimpa/hilang
-                await db.collection("vendor_updates").doc(String(selectedID)).set({
-                    estimasi_tiba: eta,
-                    catatan_vendor: note,
-                    catatan_tambahan: extra,
-                    last_vendor_update: firebase.firestore.FieldValue.serverTimestamp()
-                }, { merge: true });
+    try {
+        // MENGGUNAKAN set() DENGAN merge:true ADALAH KUNCI KESUKSESAN
+        await db.collection("vendor_updates").doc(String(selectedID)).set({
+            estimasi_tiba: eta,
+            catatan_vendor: note,
+            catatan_tambahan: extra,
+            last_vendor_update: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
 
-                document.getElementById('formContainer').classList.add('hidden');
-                document.getElementById('successState').classList.remove('hidden');
-            } catch (error) {
-                console.error("Gagal update:", error);
-                alert("Gagal simpan! Periksa koneksi internet.");
-                btn.disabled = false;
-                btn.innerText = "KIRIM UPDATE SEKARANG";
-            }
-        }
+        // Sembunyikan form dan tampilkan pesan sukses
+        document.getElementById('formContainer').classList.add('hidden');
+        document.getElementById('successState').classList.remove('hidden');
+    } catch (error) {
+        console.error("Gagal update:", error);
+        alert("Gagal kirim! Coba cek koneksi internet anda.");
+        btn.disabled = false;
+        btn.innerText = "KIRIM UPDATE SEKARANG";
+    }
+}
     </script>
 </body>
 </html>
+
