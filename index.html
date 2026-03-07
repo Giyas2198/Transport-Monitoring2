@@ -366,54 +366,57 @@ async function pushToVendor() {
             document.getElementById('statusAlert').classList.add('hidden'); 
             document.getElementById('fileInput').value = ""; 
         }
+// GANTI FUNGSI toggleResponse LAMA DENGAN INI
+let activeListeners = {}; // Untuk menyimpan daftar listener aktif
+
 async function toggleResponse(cardId, ticketIDs) {
     const panel = document.getElementById(`response-panel-${cardId}`);
     const list = document.getElementById(`response-list-${cardId}`);
     panel.classList.toggle('hidden');
 
-    if (!panel.classList.contains('hidden')) {
-        list.innerHTML = '<div class="flex items-center gap-2 text-blue-400">Memeriksa...</div>';
+    // Jika panel dibuka dan belum ada listener aktif untuk card ini
+    if (!panel.classList.contains('hidden') && !activeListeners[cardId]) {
+        list.innerHTML = '<div class="text-blue-400 animate-pulse">Menunggu respon driver (Real-time)...</div>';
         
-        try {
-            // PASTIKAN SEMUA ID ADALAH STRING
-            const stringIDs = ticketIDs.map(id => String(id));
+        const stringIDs = ticketIDs.map(id => String(id));
 
-            // Firestore hanya mengizinkan maksimal 30 ID dalam satu query 'in'
-            // Kita batasi atau bagi per 10 untuk keamanan
-            const snapshot = await db.collection("vendor_updates")
-                .where(firebase.firestore.FieldPath.documentId(), "in", stringIDs.slice(0, 10))
-                .get();
+        // MENGGUNAKAN onSnapshot AGAR AUTO-UPDATE TANPA REFRESH
+        activeListeners[cardId] = db.collection("vendor_updates")
+            .where(firebase.firestore.FieldPath.documentId(), "in", stringIDs.slice(0, 10))
+            .onSnapshot((snapshot) => {
+                list.innerHTML = "";
+                let hasUpdate = false;
 
-            list.innerHTML = "";
-            let hasUpdate = false;
-
-            snapshot.forEach(doc => {
-                const d = doc.data();
-                if (d.estimasi_tiba) { // Hanya tampilkan yang sudah diisi driver
-                    hasUpdate = true;
-                    list.innerHTML += `
-                        <div class="bg-slate-800 p-2 rounded-lg border-l-4 border-emerald-500 shadow-sm mb-2">
-                            <div class="flex justify-between items-start mb-1">
-                                <span class="font-black text-white text-[11px]">DT ${doc.id}</span>
-                                <span class="bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded text-[9px] font-bold uppercase">ETA: ${d.estimasi_tiba}</span>
+                snapshot.forEach(doc => {
+                    const d = doc.data();
+                    if (d.estimasi_tiba) {
+                        hasUpdate = true;
+                        list.innerHTML += `
+                            <div class="bg-slate-800 p-3 rounded-xl border-l-4 border-emerald-500 shadow-md mb-2 animate-bounce-short">
+                                <div class="flex justify-between items-start mb-1">
+                                    <span class="font-black text-white text-[11px]">DT ${doc.id}</span>
+                                    <span class="bg-emerald-500 text-white px-2 py-0.5 rounded text-[9px] font-bold">ETA: ${d.estimasi_tiba}</span>
+                                </div>
+                                <div class="text-slate-300 text-[10px]">Status: <span class="text-emerald-400 font-bold">${d.catatan_vendor || 'Lancar'}</span></div>
+                                ${d.catatan_tambahan ? `<div class="text-slate-500 italic text-[9px] mt-1 border-t border-slate-700 pt-1">"${d.catatan_tambahan}"</div>` : ''}
                             </div>
-                            <div class="text-slate-300 text-[10px]">Ket: <span class="text-blue-300">${d.catatan_vendor || 'Lancar'}</span></div>
-                        </div>
-                    `;
-                }
-            });
+                        `;
+                    }
+                });
 
-            if (!hasUpdate) {
-                list.innerHTML = '<p class="text-slate-500 italic p-2 text-center text-[10px]">Belum ada respon driver.</p>';
-            }
-        } catch (e) {
-            console.error(e);
-            list.innerHTML = '<p class="text-red-400 italic text-[10px]">Gagal memuat data.</p>';
-        }
+                if (!hasUpdate) {
+                    list.innerHTML = '<p class="text-slate-500 italic p-2 text-center text-[10px]">Belum ada respon driver.</p>';
+                }
+            }, (error) => {
+                console.error("Listener Error:", error);
+                list.innerHTML = '<p class="text-red-400 text-[10px]">Gagal sinkronisasi.</p>';
+            });
     }
-}    </script>
+}
+    </script>
 </body>
 
 </html>
+
 
 
