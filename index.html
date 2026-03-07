@@ -335,7 +335,11 @@ async function pushToVendor() {
     
     // 5. Tambahkan Link (Mengarah ke respon.html menggunakan ID tiket pertama)
     const currentUrl = window.location.href.replace('index.html', '');
-    const linkRespon = `${currentUrl}respon.html?id=${firstTicketID}`;
+   const allTicketIDs = visibleRows.map(el => {
+    const rowData = JSON.parse(el.getAttribute('data-row'));
+    return rowData['Delivery Ticket'] || rowData['DELIVERY TICKET'] || rowData['DEL NOTE NO'];
+}).join(',');
+const linkRespon = `${currentUrl}respon.html?ids=${allTicketIDs}`;
     
     message += `\n\n🔗 *Update di sini:* ${linkRespon}\n`;
     message += `\n━━━━━━━━━━━━━━━━━━━━`;
@@ -420,4 +424,5 @@ async function toggleResponse(cardId, ticketIDs) {
 }
     </script>
 </body>
+
 </html>
