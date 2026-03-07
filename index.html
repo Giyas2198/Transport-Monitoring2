@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TMS Monitoring - Vendor System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
+    <style>
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #1e293b; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+        .modal-open { overflow: hidden; }
+        .hidden { display: none; } /* Pastikan class hidden bekerja standar */
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen font-sans pb-20">
+
+    <div class="max-w-6xl mx-auto p-6">
+        <header class="flex justify-between items-center mb-8 bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl">
+            <div>
+                <h1 class="text-2xl font-black text-blue-500 tracking-tighter uppercase">Daily Monitoring TMS</h1>
+                <p class="text-slate-400 text-sm">Automated Firestore & Transporter Notification</p>
+            </div>
+            <div class="text-right">
+                <div id="clock" class="text-xl font-mono font-bold text-emerald-400">00:00:00</div>
+            </div>
+        </header>
+
+        <div class="bg-slate-800 p-8 rounded-3xl border-2 border-dashed border-slate-700 hover:border-blue-500/50 transition-all mb-10 group">
+            <div class="flex flex-col md:flex-row gap-6 items-center">
+                <div class="flex-1 w-full">
+                    <label class="block text-xs font-bold text-slate-500 uppercase mb-2 ml-1">Upload File CSV</label>
+                    <input type="file" id="fileInput" accept=".csv" class="block w-full text-sm text-slate-400 file:mr-4 file:py-3 file:px-6 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer transition-all" />
+                </div>
+                <div class="flex gap-3 w-full md:w-auto">
+                    <button onclick="processData()" class="flex-1 md:flex-none bg-indigo-600 hover:bg-indigo-500 px-8 py-3 rounded-xl font-bold shadow-lg transition-all active:scale-95">PROSES CSV</button>
+                    <button id="saveBtn" class="hidden flex-1 md:flex-none bg-emerald-600 hover:bg-emerald-500 px-8 py-3 rounded-xl font-bold shadow-lg transition-all animate-pulse" onclick="saveToDashboard()">SIMPAN KE FIREBASE</button>
+                </div>
+            </div>
+            <div id="statusAlert" class="hidden mt-6 p-4 bg-blue-500/10 border border-blue-500/50 rounded-2xl">
+                <span class="text-sm font-medium">Ditemukan <b id="matchCount" class="text-blue-400 text-lg">0</b> baris data.</span>
+            </div>
+        </div>
+
+        <div id="bulkActions" class="hidden mb-6 flex flex-col md:flex-row justify-between items-center bg-blue-600/10 p-4 rounded-2xl border border-blue-500/30 gap-4">
+            <div class="flex items-center gap-3">
+                <div class="bg-blue-500 text-white w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm" id="selectedCount">0</div>
+                <span class="text-sm font-semibold text-blue-100 uppercase">Card Terpilih</span>
+            </div>
+            <button onclick="previewOnDelivery()" class="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3 rounded-xl font-black text-xs transition-all shadow-lg active:scale-95">
+                PREVIEW ON_DELIVERY
+            </button>
+        </div>
+
+        <div id="dashboardGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+    </div>
+
+    <div id="modal" class="fixed inset-0 bg-slate-950/90 hidden z-50 p-4 backdrop-blur-sm flex items-center justify-center">
+        <div class="bg-slate-900 w-full max-w-[95vw] h-[90vh] rounded-3xl border border-slate-700 shadow-2xl flex flex-col overflow-hidden">
+            <div class="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-800/50">
+                <div>
+                    <h2 id="modalTitle" class="text-xl font-bold text-white uppercase">Detail Data</h2>
+                    <p id="modalSubtitle" class="text-[10px] text-slate-500 font-bold uppercase mt-1"></p>
+                </div>
+                
+                <div class="flex items-center gap-3">
+                    <div id="vendorFilterContainer" class="hidden">
+                        <select id="vendorDropdown" onchange="filterByVendor()" class="bg-slate-800 text-white text-[11px] font-bold px-4 py-2.5 rounded-xl border border-slate-700 focus:border-blue-500 outline-none cursor-pointer">
+                            <option value="">SEMUA TRANSPORTER</option>
+                        </select>
+                    </div>
+
+                    <button id="sendVendorBtn" onclick="pushToVendor()" class="hidden bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2.5 rounded-xl font-black text-xs transition-all shadow-lg">
+                        KIRIM KE VENDOR (FONNTE)
+                    </button>
+                    
+                    <button onclick="closeModal()" class="text-3xl text-slate-500 hover:text-red-500 ml-4">&times;</button>
+                </div>
+            </div>
+            <div class="flex-1 overflow-auto p-4">
+                <table id="mainTable" class="w-full text-[11px] text-left border-collapse">
+                    <thead class="bg-slate-800 sticky top-0 z-20"><tr id="tableHead"></tr></thead>
+                    <tbody id="tableBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- KONFIGURASI FIREBASE & FONNTE ---
+        const firebaseConfig = {
+           apiKey: "AIzaSyBuFvsRVcZCZxdW1o1uQOsP-zW2ySOhhlM",
+           authDomain: "tms-monitoring-6ea3e.firebaseapp.com",
+           projectId: "tms-monitoring-6ea3e",
+           storageBucket: "tms-monitoring-6ea3e.firebasestorage.app",
+           messagingSenderId: "290573726581",
+           appId: "1:290573726581:web:8293e1bb62f4d6606f193c",
+        };
+        const FONNTE_TOKEN = "DHkFE7UvY1hjCAsQUQrt"; 
+        const WA_TARGET = "120363226867442337@g.us"; 
+
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        let currentData = [];
+        let cardCounter = 1;
+
+        // Jam Realtime
+        setInterval(() => { document.getElementById('clock').innerText = new Date().toLocaleTimeString('id-ID'); }, 1000);
+
+        // Load awal dari Firestore
+        window.onload = async () => {
+            const grid = document.getElementById('dashboardGrid');
+            grid.innerHTML = '<div class="col-span-full text-center py-20 text-slate-500">Loading Data...</div>';
+            try {
+                const snapshot = await db.collection("daily_reports").orderBy("timestamp", "desc").get();
+                grid.innerHTML = "";
+                snapshot.forEach(doc => { renderCard(doc.id, doc.data()); cardCounter++; });
+            } catch (e) { grid.innerHTML = '<p class="text-red-500 text-center col-span-full">Gagal memuat data Firestore.</p>'; }
+        };
+
+        // Proses CSV
+        function processData() {
+            const fileInput = document.getElementById('fileInput');
+            if (!fileInput.files[0]) return alert("Pilih file CSV!");
+            Papa.parse(fileInput.files[0], {
+                header: true, skipEmptyLines: true,
+                complete: function(results) {
+                    currentData = results.data;
+                    document.getElementById('statusAlert').classList.remove('hidden');
+                    document.getElementById('matchCount').innerText = currentData.length;
+                    document.getElementById('saveBtn').classList.remove('hidden');
+                }
+            });
+        }
+
+        async function saveToDashboard() {
+            if (currentData.length === 0) return;
+            const cardId = Date.now().toString();
+            const reportData = { title: `Tarikan ${cardCounter}`, timestamp: firebase.firestore.FieldValue.serverTimestamp(), rows: currentData, totalRows: currentData.length };
+            try {
+                await db.collection("daily_reports").doc(cardId).set(reportData);
+                renderCard(cardId, reportData);
+                cardCounter++; resetUI();
+                alert("Berhasil disimpan ke Cloud Firestore!");
+            } catch (e) { alert("Gagal Simpan!"); }
+        }
+
+function renderCard(id, data) {
+    const grid = document.getElementById('dashboardGrid');
+    const dateStr = data.timestamp ? new Date(data.timestamp.seconds * 1000).toLocaleString('id-ID') : 'Baru';
+    
+    // Ambil semua nomor Delivery Ticket dari baris data di card ini
+    const ticketIDs = data.rows.map(row => String(row['Delivery Ticket'] || row['DELIVERY TICKET'] || row['DEL NOTE NO']));
+
+    grid.insertAdjacentHTML('afterbegin', `
+        <div id="card-${id}" class="bg-slate-800 p-6 rounded-2xl border border-slate-700 hover:border-blue-500 transition-all shadow-lg relative">
+            <div class="absolute top-4 right-4"><input type="checkbox" value="${id}" onchange="updateBulkUI()" class="card-checkbox w-5 h-5 accent-blue-500 cursor-pointer"></div>
+            <div onclick="showDetail('${id}')" class="cursor-pointer">
+                <div class="text-[10px] text-slate-500 mb-2">${dateStr}</div>
+                <h3 class="text-lg font-bold uppercase text-blue-400">${data.title}</h3>
+                <p class="text-slate-400 text-sm">${data.totalRows} Baris</p>
+            </div>
+            
+            <div class="mt-4 pt-4 border-t border-slate-700">
+                <div class="flex justify-between items-center">
+                    <button onclick="showDetail('${id}')" class="text-xs font-bold text-blue-500 uppercase">Lihat Detail</button>
+                    <button onclick='toggleResponse("${id}", ${JSON.stringify(ticketIDs)})' class="text-xs font-bold text-emerald-500 uppercase">Respon Vendor</button>
+                </div>
+                
+                <div id="response-panel-${id}" class="hidden mt-4 p-3 bg-slate-900/50 rounded-xl border border-slate-700">
+                    <h4 class="text-[10px] font-bold text-slate-500 uppercase mb-2 tracking-widest">Update Real-time Driver:</h4>
+                    <div id="response-list-${id}" class="space-y-2 text-[11px]">
+                        <p class="text-slate-500 italic">Klik tombol untuk memuat...</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-4 flex justify-end">
+                <button onclick="deleteCard('${id}')" class="text-slate-500 hover:text-red-500">
+                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                </button>
+            </div>
+            <textarea id="hidden-data-${id}" class="hidden">${JSON.stringify(data.rows)}</textarea>
+        </div>
+    `);
+}
+
+        async function deleteCard(id) {
+            if (!confirm("Hapus data ini dari Firebase?")) return;
+            try { await db.collection("daily_reports").doc(id).delete(); document.getElementById(`card-${id}`).remove(); updateBulkUI(); } catch (e) { alert("Gagal!"); }
+        }
+
+        function updateBulkUI() {
+            const count = document.querySelectorAll('.card-checkbox:checked').length;
+            document.getElementById('bulkActions').classList.toggle('hidden', count === 0);
+            document.getElementById('selectedCount').innerText = count;
+        }
+
+        // --- FITUR PREVIEW DENGAN FILTER DROPDOWN ---
+        function previewOnDelivery() {
+            let combined = [];
+            document.querySelectorAll('.card-checkbox:checked').forEach(cb => {
+                combined = combined.concat(JSON.parse(document.getElementById(`hidden-data-${cb.value}`).value));
+            });
+
+            // Filter status ON_DELIVERY
+            const filtered = combined.filter(i => {
+                const status = i.Status || i.STATUS || "";
+                return status.toUpperCase() === "ON_DELIVERY";
+            });
+
+            if (filtered.length === 0) return alert("Data ON_DELIVERY tidak ditemukan!");
+
+            // 1. Ambil list unik transporter untuk dropdown
+            const vendorDropdown = document.getElementById('vendorDropdown');
+            const vendors = [...new Set(filtered.map(item => item['TRANSPORTER'] || item['Transporter']))].filter(Boolean).sort();
+            
+            // 2. Isi Dropdown secara dinamis
+            vendorDropdown.innerHTML = '<option value="">SEMUA TRANSPORTER</option>';
+            vendors.forEach(v => { 
+                const opt = document.createElement('option');
+                opt.value = v.toUpperCase();
+                opt.textContent = v.toUpperCase();
+                vendorDropdown.appendChild(opt);
+            });
+
+            // Reset dropdown ke default
+            vendorDropdown.value = "";
+
+            document.getElementById('vendorFilterContainer').classList.remove('hidden');
+            renderTableModal(filtered, "Preview ON_DELIVERY");
+            document.getElementById('modalSubtitle').innerText = "Silakan Filter Transporter Sebelum Kirim WA";
+            document.getElementById('sendVendorBtn').classList.remove('hidden');
+        }
+
+        // Fungsi Filter Baris Berdasarkan Dropdown
+        function filterByVendor() {
+            const selectedVal = document.getElementById('vendorDropdown').value.trim().toUpperCase();
+            const rows = document.querySelectorAll('#tableBody tr');
+
+            rows.forEach(row => {
+                const rowVendor = (row.getAttribute('data-vendor') || "").toUpperCase();
+                
+                if (selectedVal === "" || rowVendor === selectedVal) {
+                    row.style.display = ""; // Tampilkan
+                } else {
+                    row.style.display = "none"; // Sembunyikan
+                }
+            });
+        }
+
+        function showDetail(id) {
+            const data = JSON.parse(document.getElementById(`hidden-data-${id}`).value);
+            document.getElementById('vendorFilterContainer').classList.add('hidden');
+            renderTableModal(data, "Detail Data");
+            document.getElementById('modalSubtitle').innerText = "Melihat Seluruh Record Data";
+            document.getElementById('sendVendorBtn').classList.add('hidden');
+        }
+
+        function renderTableModal(data, title) {
+            const head = document.getElementById('tableHead');
+            const body = document.getElementById('tableBody');
+            if (data.length === 0) return;
+
+            const cols = Object.keys(data[0]);
+            document.getElementById('modalTitle').innerText = title;
+            
+            head.innerHTML = `<th class="p-3 bg-slate-800 border-b border-slate-700 text-center"><input type="checkbox" onclick="toggleAllRows(this)"></th>` + 
+                             cols.map(c => `<th class="p-4 bg-slate-800 text-slate-500 font-bold uppercase text-[9px] min-w-[130px] border-b border-slate-700">${c}</th>`).join('');
+            
+            body.innerHTML = data.map(row => {
+                const vendorName = row['TRANSPORTER'] || row['Transporter'] || "";
+                return `
+                    <tr class="hover:bg-slate-800 border-b border-slate-800" data-vendor="${vendorName}">
+                        <td class="p-3 text-center"><input type="checkbox" class="row-checkbox" data-row='${JSON.stringify(row)}'></td>
+                        ${cols.map(c => `<td class="p-3 text-slate-300">${row[c] || "-"}</td>`).join('')}
+                    </tr>
+                `;
+            }).join('');
+            
+            document.getElementById('modal').classList.remove('hidden');
+            document.body.classList.add('modal-open');
+        }
+
+async function pushToVendor() {
+    // 1. Ambil baris yang tampil (lolos filter) dan dicentang
+    const visibleRows = document.querySelectorAll('#tableBody tr:not([style*="display: none"]) .row-checkbox:checked');
+    
+    if (visibleRows.length === 0) return alert("Pilih data yang ingin dikirim!");
+    
+    // Ambil nama vendor dari dropdown (default ke MAERSK jika kosong)
+    const vendorName = document.getElementById('vendorDropdown').value || "MAERSK";
+    
+    if (!confirm(`Kirim reminder untuk ${visibleRows.length} tiket ke vendor ${vendorName}?`)) return;
+
+    // 2. Header Pesan (Sesuai Contoh Gambar)
+    let message = `⚠️ *REMINDER PENGIRIMAN TMS*\n`;
+    message += `━━━━━━━━━━━━━━━━━━━━\n`;
+    message += `*Vendor:* ${vendorName}\n`;
+    message += `*Status:* ON_DELIVERY\n`;
+    message += `*Tgl:* ${new Date().toLocaleDateString('id-ID')}\n`;
+    message += `━━━━━━━━━━━━━━━━━━━━\n\n`;
+    message += `Halo Driver/Vendor, mohon update estimasi tiba (ETA) pada link di bawah ini karena status pada tms masih on delivery mohon update yah. terlampir beberapa pengiriman yg belum sampai:\n\n`;
+
+    let ticketList = [];
+    let firstTicketID = "";
+
+    // 3. Proses Data & Simpan ke Firebase
+    for (let el of visibleRows) {
+        const rowData = JSON.parse(el.getAttribute('data-row'));
+        
+        // MENGAMBIL DATA DARI KOLOM 'Delivery Ticket'
+        const ticketID = rowData['Delivery Ticket'] || rowData['DELIVERY TICKET'] || rowData['DEL NOTE NO'];
+        
+        if (!firstTicketID) firstTicketID = ticketID; 
+
+        // Update data ke Firestore agar link respon valid
+        await db.collection("vendor_updates").doc(String(ticketID)).set({ 
+            ...rowData, 
+            last_notified: firebase.firestore.FieldValue.serverTimestamp() 
+        }, { merge: true });
+
+        ticketList.push(`DT *${ticketID}*`);
+    }
+
+    // 4. Gabungkan Nomor Tiket (DT 15845243 | DT 15845244)
+    message += ticketList.join(" | ");
+    
+    // 5. Tambahkan Link (Mengarah ke respon.html menggunakan ID tiket pertama)
+    const currentUrl = window.location.href.replace('index.html', '');
+    const linkRespon = `${currentUrl}respon.html?id=${firstTicketID}`;
+    
+    message += `\n\n🔗 *Update di sini:* ${linkRespon}\n`;
+    message += `\n━━━━━━━━━━━━━━━━━━━━`;
+
+    // 6. Kirim via Fonnte
+    sendToFonnte(message);
+}
+
+        function sendToFonnte(msg) {
+            const fd = new FormData(); 
+            fd.append("target", WA_TARGET); 
+            fd.append("message", msg);
+            
+            fetch("https://api.fonnte.com/send", { 
+                method: 'POST', 
+                headers: { "Authorization": FONNTE_TOKEN }, 
+                body: fd 
+            })
+            .then(() => { alert("WA Berhasil Dikirim!"); closeModal(); })
+            .catch(() => alert("Gagal Kirim Fonnte!"));
+        }
+
+        function toggleAllRows(s) { 
+            // Hanya mencentang baris yang tidak disembunyikan oleh filter
+            document.querySelectorAll('#tableBody tr:not([style*="display: none"]) .row-checkbox').forEach(cb => cb.checked = s.checked); 
+        }
+
+        function closeModal() { 
+            document.getElementById('modal').classList.add('hidden'); 
+            document.body.classList.remove('modal-open'); 
+        }
+
+        function resetUI() { 
+            document.getElementById('saveBtn').classList.add('hidden'); 
+            document.getElementById('statusAlert').classList.add('hidden'); 
+            document.getElementById('fileInput').value = ""; 
+        }
+async function toggleResponse(cardId, ticketIDs) {
+    const panel = document.getElementById(`response-panel-${cardId}`);
+    const list = document.getElementById(`response-list-${cardId}`);
+    
+    panel.classList.toggle('hidden');
+
+    if (!panel.classList.contains('hidden')) {
+        list.innerHTML = '<div class="flex items-center gap-2 text-blue-400"><div class="animate-spin h-3 w-3 border-2 border-blue-500 border-t-transparent rounded-full"></div> Memeriksa Firestore...</div>';
+        
+        try {
+            // Kita ambil data dari vendor_updates yang ID-nya ada di dalam list ticketIDs card ini
+            const snapshot = await db.collection("vendor_updates")
+                .where(firebase.firestore.FieldPath.documentId(), "in", ticketIDs.slice(0, 10)) // Firestore limit 10 ID per 'in' query
+                .get();
+
+            list.innerHTML = "";
+            let hasUpdate = false;
+
+            snapshot.forEach(doc => {
+                const d = doc.data();
+                // Hanya tampilkan jika sudah ada estimasi tiba dari driver
+                if (d.estimasi_tiba) {
+                    hasUpdate = true;
+                    list.innerHTML += `
+                        <div class="bg-slate-800 p-2 rounded-lg border-l-4 border-emerald-500 shadow-sm">
+                            <div class="flex justify-between items-start mb-1">
+                                <span class="font-black text-white">DT ${doc.id}</span>
+                                <span class="bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded text-[9px] font-bold uppercase">ETA: ${d.estimasi_tiba}</span>
+                            </div>
+                            <div class="text-slate-300 font-medium">Ket: <span class="text-blue-300">${d.catatan_vendor || 'Lancar'}</span></div>
+                            ${d.catatan_tambahan ? `<div class="text-slate-500 italic mt-1 text-[10px]">"${d.catatan_tambahan}"</div>` : ''}
+                        </div>
+                    `;
+                }
+            });
+
+            if (!hasUpdate) {
+                list.innerHTML = '<p class="text-slate-500 italic p-2 bg-slate-900/30 rounded-lg text-center">Belum ada respon dari driver untuk batch ini.</p>';
+            }
+        } catch (e) {
+            console.error(e);
+            list.innerHTML = '<p class="text-red-400 italic">Gagal memuat respon. Pastikan ID Ticket sesuai.</p>';
+        }
+    }
+}
+    </script>
+</body>
+</html>
