@@ -374,42 +374,40 @@ async function toggleResponse(cardId, ticketIDs) {
     const list = document.getElementById(`response-list-${cardId}`);
     panel.classList.toggle('hidden');
 
-    // Jika panel dibuka dan belum ada listener aktif untuk card ini
     if (!panel.classList.contains('hidden') && !activeListeners[cardId]) {
-        list.innerHTML = '<div class="text-blue-400 animate-pulse">Menunggu respon driver (Real-time)...</div>';
+        list.innerHTML = '<div class="text-blue-400 animate-pulse text-[10px]">Memantau respon driver...</div>';
         
-        const stringIDs = ticketIDs.map(id => String(id));
-
-        // MENGGUNAKAN onSnapshot AGAR AUTO-UPDATE TANPA REFRESH
+        // Gunakan onSnapshot pada koleksi vendor_updates secara keseluruhan 
+        // tapi difilter berdasarkan tiket yang ada di kartu ini
         activeListeners[cardId] = db.collection("vendor_updates")
-            .where(firebase.firestore.FieldPath.documentId(), "in", stringIDs.slice(0, 10))
             .onSnapshot((snapshot) => {
-                list.innerHTML = "";
-                let hasUpdate = false;
+                let updatesFound = 0;
+                let htmlContent = "";
 
                 snapshot.forEach(doc => {
-                    const d = doc.data();
-                    if (d.estimasi_tiba) {
-                        hasUpdate = true;
-                        list.innerHTML += `
-                            <div class="bg-slate-800 p-3 rounded-xl border-l-4 border-emerald-500 shadow-md mb-2 animate-bounce-short">
-                                <div class="flex justify-between items-start mb-1">
-                                    <span class="font-black text-white text-[11px]">DT ${doc.id}</span>
-                                    <span class="bg-emerald-500 text-white px-2 py-0.5 rounded text-[9px] font-bold">ETA: ${d.estimasi_tiba}</span>
-                                </div>
-                                <div class="text-slate-300 text-[10px]">Status: <span class="text-emerald-400 font-bold">${d.catatan_vendor || 'Lancar'}</span></div>
-                                ${d.catatan_tambahan ? `<div class="text-slate-500 italic text-[9px] mt-1 border-t border-slate-700 pt-1">"${d.catatan_tambahan}"</div>` : ''}
-                            </div>
-                        `;
+                    // Cek apakah ID dokumen ini ada di dalam daftar ticketIDs kartu ini
+                    if (ticketIDs.includes(doc.id) || ticketIDs.includes(Number(doc.id))) {
+                        const d = doc.data();
+                        if (d.estimasi_tiba) {
+                            updatesFound++;
+                            htmlContent += `
+                                <div class="bg-slate-800 p-3 rounded-xl border-l-4 border-emerald-500 mb-2 shadow-lg">
+                                    <div class="flex justify-between items-start">
+                                        <span class="font-black text-white text-[10px]">DT ${doc.id}</span>
+                                        <span class="bg-emerald-600 text-white px-2 py-0.5 rounded text-[9px] font-bold">ETA: ${d.estimasi_tiba}</span>
+                                    </div>
+                                    <div class="text-emerald-400 text-[10px] font-bold mt-1">${d.catatan_vendor}</div>
+                                    ${d.catatan_tambahan ? `<div class="text-slate-500 italic text-[9px] mt-1 border-t border-slate-700 pt-1">"${d.catatan_tambahan}"</div>` : ''}
+                                </div>`;
+                        }
                     }
                 });
 
-                if (!hasUpdate) {
-                    list.innerHTML = '<p class="text-slate-500 italic p-2 text-center text-[10px]">Belum ada respon driver.</p>';
+                if (updatesFound > 0) {
+                    list.innerHTML = htmlContent;
+                } else {
+                    list.innerHTML = '<p class="text-slate-500 italic p-2 text-center text-[10px]">Belum ada respon vendor.</p>';
                 }
-            }, (error) => {
-                console.error("Listener Error:", error);
-                list.innerHTML = '<p class="text-red-400 text-[10px]">Gagal sinkronisasi.</p>';
             });
     }
 }
@@ -417,6 +415,7 @@ async function toggleResponse(cardId, ticketIDs) {
 </body>
 
 </html>
+
 
 
 
