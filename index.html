@@ -290,17 +290,14 @@ function renderCard(id, data) {
         }
 
 async function pushToVendor() {
-    // 1. Ambil baris yang tampil (lolos filter) dan dicentang
     const visibleRows = document.querySelectorAll('#tableBody tr:not([style*="display: none"]) .row-checkbox:checked');
     
     if (visibleRows.length === 0) return alert("Pilih data yang ingin dikirim!");
     
-    // Ambil nama vendor dari dropdown (default ke MAERSK jika kosong)
     const vendorName = document.getElementById('vendorDropdown').value || "MAERSK";
     
     if (!confirm(`Kirim reminder untuk ${visibleRows.length} tiket ke vendor ${vendorName}?`)) return;
 
-    // 2. Header Pesan (Sesuai Contoh Gambar)
     let message = `⚠️ *REMINDER PENGIRIMAN TMS*\n`;
     message += `━━━━━━━━━━━━━━━━━━━━\n`;
     message += `*Vendor:* ${vendorName}\n`;
@@ -310,44 +307,36 @@ async function pushToVendor() {
     message += `Halo Driver/Vendor, mohon update estimasi tiba (ETA) pada link di bawah ini karena status pada tms masih on delivery mohon update yah. terlampir beberapa pengiriman yg belum sampai:\n\n`;
 
     let ticketList = [];
-    let firstTicketID = "";
+    let idArray = []; // Untuk menampung ID tanpa format teks WA
 
-    // 3. Proses Data & Simpan ke Firebase
     for (let el of visibleRows) {
         const rowData = JSON.parse(el.getAttribute('data-row'));
-        
-        // MENGAMBIL DATA DARI KOLOM 'Delivery Ticket'
         const ticketID = rowData['Delivery Ticket'] || rowData['DELIVERY TICKET'] || rowData['DEL NOTE NO'];
         
-        if (!firstTicketID) firstTicketID = ticketID; 
-
-        // Update data ke Firestore agar link respon valid
+        // Simpan ke Firestore
         await db.collection("vendor_updates").doc(String(ticketID)).set({ 
             ...rowData, 
             last_notified: firebase.firestore.FieldValue.serverTimestamp() 
         }, { merge: true });
 
         ticketList.push(`DT *${ticketID}*`);
+        idArray.push(ticketID); // Masukkan ID murni ke array untuk link
     }
 
-    // 4. Gabungkan Nomor Tiket (DT 15845243 | DT 15845244)
+    // Gabungkan nomor tiket untuk tampilan pesan
     message += ticketList.join(" | ");
     
-    // 5. Tambahkan Link (Mengarah ke respon.html menggunakan ID tiket pertama)
+    // PERBAIKAN LINK: Gabungkan semua ID dengan koma
     const currentUrl = window.location.href.replace('index.html', '');
-   const allTicketIDs = visibleRows.map(el => {
-    const rowData = JSON.parse(el.getAttribute('data-row'));
-    return rowData['Delivery Ticket'] || rowData['DELIVERY TICKET'] || rowData['DEL NOTE NO'];
-}).join(',');
-const linkRespon = `${currentUrl}respon.html?ids=${allTicketIDs}`;
+    const allIDs = idArray.join(',');
+    const linkRespon = `${currentUrl}respon.html?ids=${allIDs}`;
     
     message += `\n\n🔗 *Update di sini:* ${linkRespon}\n`;
     message += `\n━━━━━━━━━━━━━━━━━━━━`;
 
-    // 6. Kirim via Fonnte
+    // Panggil fungsi kirim
     sendToFonnte(message);
 }
-
         function sendToFonnte(msg) {
             const fd = new FormData(); 
             fd.append("target", WA_TARGET); 
@@ -426,3 +415,4 @@ async function toggleResponse(cardId, ticketIDs) {
 </body>
 
 </html>
+
