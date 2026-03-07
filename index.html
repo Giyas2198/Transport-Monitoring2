@@ -17,6 +17,19 @@
         ::-webkit-scrollbar-thumb:hover { background: #475569; }
         .modal-open { overflow: hidden; }
         .hidden { display: none; } /* Pastikan class hidden bekerja standar */
+        .response-scroll::-webkit-scrollbar { 
+        width: 4px; 
+    }
+    .response-scroll::-webkit-scrollbar-track { 
+        background: transparent; 
+    }
+    .response-scroll::-webkit-scrollbar-thumb { 
+        background: #475569; 
+        border-radius: 10px; 
+    }
+    .response-scroll::-webkit-scrollbar-thumb:hover { 
+        background: #64748b; 
+    }
     </style>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen font-sans pb-20">
@@ -175,11 +188,11 @@ function renderCard(id, data) {
                 </div>
                 
                 <div id="response-panel-${id}" class="hidden mt-4 p-3 bg-slate-900/50 rounded-xl border border-slate-700">
-                    <h4 class="text-[10px] font-bold text-slate-500 uppercase mb-2 tracking-widest">Update Real-time Driver:</h4>
-                    <div id="response-list-${id}" class="space-y-2 text-[11px]">
-                        <p class="text-slate-500 italic">Klik tombol untuk memuat...</p>
-                    </div>
-                </div>
+    <h4 class="text-[10px] font-bold text-slate-500 uppercase mb-2 tracking-widest">Update Real-time Driver:</h4>
+    <div id="response-list-${id}" class="space-y-2 text-[11px] max-h-60 overflow-y-auto pr-2">
+        <p class="text-slate-500 italic text-center">Klik tombol untuk memuat...</p>
+    </div>
+</div>
             </div>
 
             <div class="mt-4 flex justify-end">
@@ -415,6 +428,7 @@ async function toggleResponse(cardId, ticketIDs) {
 </body>
 
 </html>
+
 
 
 
