@@ -38,7 +38,7 @@
                     <div>
                         <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2 ml-1">Pilih Nomor Tiket (DT)</label>
                         <select id="selectTicket" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-blue-500 transition-all font-bold">
-                            </select>
+                        </select>
                     </div>
 
                     <div>
@@ -83,7 +83,7 @@
     </div>
 
     <script>
-        // --- KONFIGURASI FIREBASE ---
+        // Konfigurasi Firebase Anda
         const firebaseConfig = {
            apiKey: "AIzaSyBuFvsRVcZCZxdW1o1uQOsP-zW2ySOhhlM",
            authDomain: "tms-monitoring-6ea3e.firebaseapp.com",
@@ -96,7 +96,7 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
 
-        // Mengambil parameter 'ids' atau 'id' dari URL
+        // Ambil ID dari URL (mendukung parameter id tunggal atau ids jamak)
         const urlParams = new URLSearchParams(window.location.search);
         const idsParam = urlParams.get('ids') || urlParams.get('id');
 
@@ -104,32 +104,30 @@
 
         async function loadDeliveryData() {
             if (!idsParam) {
-                document.getElementById('loader').innerHTML = "<p class='text-red-500 font-bold'>LINK TIDAK VALID (ID KOSONG)</p>";
+                document.getElementById('loader').innerHTML = "<p class='text-red-500 font-bold'>LINK TIDAK VALID</p>";
                 return;
             }
 
-            // Memecah string ID menjadi array jika ada tanda koma
-            const idList = idsParam.split(',');
+            const idList = idsParam.split(','); // Pecah menjadi array
             
             try {
-                // Mengambil data tiket pertama untuk info display
-                const doc = await db.collection("vendor_updates").doc(String(idList[0])).get();
+                // Ambil data dari tiket pertama untuk info display (Customer & Truck)
+                const doc = await db.collection("vendor_updates").doc(String(idList[0].trim())).get();
                 
                 if (doc.exists) {
                     const data = doc.data();
                     
-                    // Isi dropdown tiket agar driver bisa memilih salah satu
+                    // Isi dropdown dengan semua nomor tiket yang dilampirkan
                     const selectTicket = document.getElementById('selectTicket');
                     selectTicket.innerHTML = idList.map(id => `<option value="${id.trim()}">${id.trim()}</option>`).join('');
 
-                    // Tampilkan info ringkas dari tiket pertama
                     document.getElementById('displayCustomer').innerText = data['Customer'] || data['CUSTOMER'] || "-";
                     document.getElementById('displayTruck').innerText = data['Truck'] || data['TRUCK'] || data['PLAT NOMOR'] || "-";
                     
                     document.getElementById('loader').classList.add('hidden');
                     document.getElementById('formContainer').classList.remove('hidden');
                 } else {
-                    document.getElementById('loader').innerHTML = "<p class='text-slate-400 uppercase font-bold text-sm'>Data Tidak Ditemukan di Database</p>";
+                    document.getElementById('loader').innerHTML = "<p class='text-slate-400 uppercase font-bold text-sm'>Data Tidak Ditemukan</p>";
                 }
             } catch (error) {
                 console.error("Firebase Error:", error);
@@ -138,7 +136,7 @@
         }
 
         async function submitUpdate() {
-            const selectedID = document.getElementById('selectTicket').value; // Ambil ID yang dipilih di dropdown
+            const selectedID = document.getElementById('selectTicket').value; // Ambil ID yang dipilih driver
             const eta = document.getElementById('inputEta').value;
             const note = document.getElementById('inputNote').value;
             const extra = document.getElementById('additionalNote').value;
@@ -146,7 +144,7 @@
             if (!eta) return alert("Mohon isi jam estimasi tiba!");
 
             try {
-                // Gunakan String(selectedID) untuk memastikan kecocokan ID di Firestore
+                // Simpan respon ke Firestore menggunakan ID tiket yang dipilih
                 await db.collection("vendor_updates").doc(String(selectedID)).update({
                     estimasi_tiba: eta,
                     catatan_vendor: note,
@@ -158,7 +156,7 @@
                 document.getElementById('successState').classList.remove('hidden');
             } catch (error) {
                 console.error("Update Error:", error);
-                alert("Gagal mengirim data. Pastikan ID Ticket sesuai.");
+                alert("Gagal mengirim data. Pastikan nomor tiket sesuai.");
             }
         }
     </script>
