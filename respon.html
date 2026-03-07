@@ -13,7 +13,7 @@
     <div id="app" class="w-full max-w-md bg-slate-800 p-8 rounded-3xl border border-slate-700 shadow-2xl">
         <div id="loader" class="text-center py-10">
             <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-            <p class="text-slate-400 font-bold uppercase text-xs tracking-widest">Mengambil Data...</p>
+            <p class="text-slate-400 font-bold uppercase text-xs tracking-widest">Sinkronisasi Database...</p>
         </div>
 
         <div id="formContainer" class="hidden">
@@ -52,21 +52,18 @@
                             <option value="Lancar">Lancar / On Progress</option>
                             <option value="Macet di Tol">Macet di Tol</option>
                             <option value="Mobil Trouble">Mobil Trouble</option>
-                            <option value="Sudah diterima, DT belum balik">Sudah diterima, DT belum balik</option>
                             <option value="Toko Tutup">Toko Tutup</option>
-                            <option value="Penerima tidak di tempat">Penerima tidak di tempat</option>
-                            <option value="Kesorean">Kesorean</option>
                             <option value="Lainnya">Lainnya (Tulis di Catatan)</option>
                         </select>
                     </div>
 
                     <div>
                         <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2 ml-1">Catatan Tambahan (Opsional)</label>
-                        <textarea id="additionalNote" rows="2" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-blue-500 transition-all" placeholder="Contoh: Ban bocor di KM 45..."></textarea>
+                        <textarea id="additionalNote" rows="2" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-blue-500 transition-all" placeholder="Contoh: Ban bocor..."></textarea>
                     </div>
                 </div>
 
-                <button onclick="submitUpdate()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-4 rounded-2xl shadow-lg shadow-blue-500/20 transition-all active:scale-95 uppercase text-sm tracking-widest">
+                <button id="btnSubmit" onclick="submitUpdate()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-4 rounded-2xl shadow-lg transition-all active:scale-95 uppercase text-sm">
                     Kirim Update Sekarang
                 </button>
             </div>
@@ -76,14 +73,13 @@
             <div class="bg-emerald-500/10 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 border border-emerald-500/50">
                 <svg class="w-10 h-10 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
             </div>
-            <h2 class="text-xl font-black text-white uppercase mb-2">Update Berhasil!</h2>
-            <p class="text-slate-400 text-sm">Data telah tersimpan di sistem monitoring. Terima kasih, hati-hati di jalan.</p>
-            <button onclick="location.reload()" class="mt-6 text-blue-500 font-bold text-xs uppercase tracking-widest hover:underline">Update Tiket Lainnya</button>
+            <h2 class="text-xl font-black text-white uppercase mb-2">Berhasil Terkirim!</h2>
+            <p class="text-slate-400 text-sm">Data sudah masuk ke dashboard monitoring.</p>
+            <button onclick="location.reload()" class="mt-6 text-blue-500 font-bold text-xs uppercase hover:underline underline-offset-4">Update Tiket Lainnya</button>
         </div>
     </div>
 
     <script>
-        // Konfigurasi Firebase Anda
         const firebaseConfig = {
            apiKey: "AIzaSyBuFvsRVcZCZxdW1o1uQOsP-zW2ySOhhlM",
            authDomain: "tms-monitoring-6ea3e.firebaseapp.com",
@@ -96,7 +92,6 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
 
-        // Ambil ID dari URL (mendukung parameter id tunggal atau ids jamak)
         const urlParams = new URLSearchParams(window.location.search);
         const idsParam = urlParams.get('ids') || urlParams.get('id');
 
@@ -104,59 +99,66 @@
 
         async function loadDeliveryData() {
             if (!idsParam) {
-                document.getElementById('loader').innerHTML = "<p class='text-red-500 font-bold'>LINK TIDAK VALID</p>";
+                document.getElementById('loader').innerHTML = "<p class='text-red-500 font-bold'>ERROR: LINK TIDAK SAH</p>";
                 return;
             }
 
-            const idList = idsParam.split(','); // Pecah menjadi array
+            const idList = idsParam.split(',').map(item => item.trim());
             
             try {
-                // Ambil data dari tiket pertama untuk info display (Customer & Truck)
-                const doc = await db.collection("vendor_updates").doc(String(idList[0].trim())).get();
+                // Gunakan String() karena Firestore menyimpan Document ID sebagai string
+                const docRef = db.collection("vendor_updates").doc(String(idList[0]));
+                const doc = await docRef.get();
                 
                 if (doc.exists) {
                     const data = doc.data();
-                    
-                    // Isi dropdown dengan semua nomor tiket yang dilampirkan
                     const selectTicket = document.getElementById('selectTicket');
-                    selectTicket.innerHTML = idList.map(id => `<option value="${id.trim()}">${id.trim()}</option>`).join('');
+                    selectTicket.innerHTML = idList.map(id => `<option value="${id}">${id}</option>`).join('');
 
-                    document.getElementById('displayCustomer').innerText = data['Customer'] || data['CUSTOMER'] || "-";
-                    document.getElementById('displayTruck').innerText = data['Truck'] || data['TRUCK'] || data['PLAT NOMOR'] || "-";
+                    document.getElementById('displayCustomer').innerText = data['Customer'] || data['CUSTOMER'] || "N/A";
+                    document.getElementById('displayTruck').innerText = data['Truck'] || data['PLAT NOMOR'] || "N/A";
                     
                     document.getElementById('loader').classList.add('hidden');
                     document.getElementById('formContainer').classList.remove('hidden');
                 } else {
-                    document.getElementById('loader').innerHTML = "<p class='text-slate-400 uppercase font-bold text-sm'>Data Tidak Ditemukan</p>";
+                    document.getElementById('loader').innerHTML = `
+                        <p class='text-slate-400 text-sm'>ID ${idList[0]} tidak terdaftar.<br>Klik tombol "Kirim ke Vendor" dulu di Dashboard.</p>
+                    `;
                 }
             } catch (error) {
-                console.error("Firebase Error:", error);
-                document.getElementById('loader').innerHTML = "<p class='text-red-500 font-bold'>GAGAL KONEKSI DATABASE</p>";
+                console.error(error);
+                document.getElementById('loader').innerHTML = "<p class='text-red-500'>Gagal memuat data database.</p>";
             }
         }
 
         async function submitUpdate() {
-            const selectedID = document.getElementById('selectTicket').value; // Ambil ID yang dipilih driver
+            const btn = document.getElementById('btnSubmit');
+            const selectedID = document.getElementById('selectTicket').value;
             const eta = document.getElementById('inputEta').value;
             const note = document.getElementById('inputNote').value;
             const extra = document.getElementById('additionalNote').value;
 
-            if (!eta) return alert("Mohon isi jam estimasi tiba!");
+            if (!eta) return alert("Jam estimasi wajib diisi!");
+
+            btn.disabled = true;
+            btn.innerText = "MENGIRIM...";
 
             try {
-                // Simpan respon ke Firestore menggunakan ID tiket yang dipilih
-                await db.collection("vendor_updates").doc(String(selectedID)).update({
+                // MENGGUNAKAN SET MERGE agar data tidak tertimpa/hilang
+                await db.collection("vendor_updates").doc(String(selectedID)).set({
                     estimasi_tiba: eta,
                     catatan_vendor: note,
                     catatan_tambahan: extra,
                     last_vendor_update: firebase.firestore.FieldValue.serverTimestamp()
-                });
+                }, { merge: true });
 
                 document.getElementById('formContainer').classList.add('hidden');
                 document.getElementById('successState').classList.remove('hidden');
             } catch (error) {
-                console.error("Update Error:", error);
-                alert("Gagal mengirim data. Pastikan nomor tiket sesuai.");
+                console.error("Gagal update:", error);
+                alert("Gagal simpan! Periksa koneksi internet.");
+                btn.disabled = false;
+                btn.innerText = "KIRIM UPDATE SEKARANG";
             }
         }
     </script>
