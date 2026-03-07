@@ -369,16 +369,19 @@ async function pushToVendor() {
 async function toggleResponse(cardId, ticketIDs) {
     const panel = document.getElementById(`response-panel-${cardId}`);
     const list = document.getElementById(`response-list-${cardId}`);
-    
     panel.classList.toggle('hidden');
 
     if (!panel.classList.contains('hidden')) {
-        list.innerHTML = '<div class="flex items-center gap-2 text-blue-400"><div class="animate-spin h-3 w-3 border-2 border-blue-500 border-t-transparent rounded-full"></div> Memeriksa Firestore...</div>';
+        list.innerHTML = '<div class="flex items-center gap-2 text-blue-400">Memeriksa...</div>';
         
         try {
-            // Kita ambil data dari vendor_updates yang ID-nya ada di dalam list ticketIDs card ini
+            // PASTIKAN SEMUA ID ADALAH STRING
+            const stringIDs = ticketIDs.map(id => String(id));
+
+            // Firestore hanya mengizinkan maksimal 30 ID dalam satu query 'in'
+            // Kita batasi atau bagi per 10 untuk keamanan
             const snapshot = await db.collection("vendor_updates")
-                .where(firebase.firestore.FieldPath.documentId(), "in", ticketIDs.slice(0, 10)) // Firestore limit 10 ID per 'in' query
+                .where(firebase.firestore.FieldPath.documentId(), "in", stringIDs.slice(0, 10))
                 .get();
 
             list.innerHTML = "";
@@ -386,33 +389,31 @@ async function toggleResponse(cardId, ticketIDs) {
 
             snapshot.forEach(doc => {
                 const d = doc.data();
-                // Hanya tampilkan jika sudah ada estimasi tiba dari driver
-                if (d.estimasi_tiba) {
+                if (d.estimasi_tiba) { // Hanya tampilkan yang sudah diisi driver
                     hasUpdate = true;
                     list.innerHTML += `
-                        <div class="bg-slate-800 p-2 rounded-lg border-l-4 border-emerald-500 shadow-sm">
+                        <div class="bg-slate-800 p-2 rounded-lg border-l-4 border-emerald-500 shadow-sm mb-2">
                             <div class="flex justify-between items-start mb-1">
-                                <span class="font-black text-white">DT ${doc.id}</span>
+                                <span class="font-black text-white text-[11px]">DT ${doc.id}</span>
                                 <span class="bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded text-[9px] font-bold uppercase">ETA: ${d.estimasi_tiba}</span>
                             </div>
-                            <div class="text-slate-300 font-medium">Ket: <span class="text-blue-300">${d.catatan_vendor || 'Lancar'}</span></div>
-                            ${d.catatan_tambahan ? `<div class="text-slate-500 italic mt-1 text-[10px]">"${d.catatan_tambahan}"</div>` : ''}
+                            <div class="text-slate-300 text-[10px]">Ket: <span class="text-blue-300">${d.catatan_vendor || 'Lancar'}</span></div>
                         </div>
                     `;
                 }
             });
 
             if (!hasUpdate) {
-                list.innerHTML = '<p class="text-slate-500 italic p-2 bg-slate-900/30 rounded-lg text-center">Belum ada respon dari driver untuk batch ini.</p>';
+                list.innerHTML = '<p class="text-slate-500 italic p-2 text-center text-[10px]">Belum ada respon driver.</p>';
             }
         } catch (e) {
             console.error(e);
-            list.innerHTML = '<p class="text-red-400 italic">Gagal memuat respon. Pastikan ID Ticket sesuai.</p>';
+            list.innerHTML = '<p class="text-red-400 italic text-[10px]">Gagal memuat data.</p>';
         }
     }
-}
-    </script>
+}    </script>
 </body>
 
 </html>
+
 
