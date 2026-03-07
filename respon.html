@@ -36,7 +36,7 @@
 
                 <div class="space-y-4">
                     <div>
-                        <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2 ml-1">Nomor Delivery Ticket</label>
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2 ml-1">Pilih Nomor Tiket (DT)</label>
                         <select id="selectTicket" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-blue-500 transition-all font-bold">
                             </select>
                     </div>
@@ -78,11 +78,12 @@
             </div>
             <h2 class="text-xl font-black text-white uppercase mb-2">Update Berhasil!</h2>
             <p class="text-slate-400 text-sm">Data telah tersimpan di sistem monitoring. Terima kasih, hati-hati di jalan.</p>
+            <button onclick="location.reload()" class="mt-6 text-blue-500 font-bold text-xs uppercase tracking-widest hover:underline">Update Tiket Lainnya</button>
         </div>
     </div>
 
     <script>
-        // --- KONFIGURASI FIREBASE (Samakan dengan index.html) ---
+        // --- KONFIGURASI FIREBASE ---
         const firebaseConfig = {
            apiKey: "AIzaSyBuFvsRVcZCZxdW1o1uQOsP-zW2ySOhhlM",
            authDomain: "tms-monitoring-6ea3e.firebaseapp.com",
@@ -95,43 +96,49 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
 
+        // Mengambil parameter 'ids' atau 'id' dari URL
         const urlParams = new URLSearchParams(window.location.search);
-        const deliveryID = urlParams.get('id');
+        const idsParam = urlParams.get('ids') || urlParams.get('id');
 
         window.onload = loadDeliveryData;
 
         async function loadDeliveryData() {
-            if (!deliveryID) {
-                document.getElementById('loader').innerHTML = "<p class='text-red-500 font-bold'>LINK TIDAK VALID (ID Kosong)</p>";
+            if (!idsParam) {
+                document.getElementById('loader').innerHTML = "<p class='text-red-500 font-bold'>LINK TIDAK VALID (ID KOSONG)</p>";
                 return;
             }
 
+            // Memecah string ID menjadi array jika ada tanda koma
+            const idList = idsParam.split(',');
+            
             try {
-                const doc = await db.collection("vendor_updates").doc(deliveryID).get();
+                // Mengambil data tiket pertama untuk info display
+                const doc = await db.collection("vendor_updates").doc(String(idList[0])).get();
+                
                 if (doc.exists) {
                     const data = doc.data();
                     
-                    // Isi dropdown ticket
+                    // Isi dropdown tiket agar driver bisa memilih salah satu
                     const selectTicket = document.getElementById('selectTicket');
-                    const ticketNo = data['Delivery Ticket'] || data['DELIVERY TICKET'] || deliveryID;
-                    selectTicket.innerHTML = `<option value="${ticketNo}">${ticketNo}</option>`;
+                    selectTicket.innerHTML = idList.map(id => `<option value="${id.trim()}">${id.trim()}</option>`).join('');
 
-                    // Tampilkan info ringkas
-                    document.getElementById('displayCustomer').innerText = data['Customer'] || "-";
-                    document.getElementById('displayTruck').innerText = data['Truck'] || data['TRUCK'] || "-";
+                    // Tampilkan info ringkas dari tiket pertama
+                    document.getElementById('displayCustomer').innerText = data['Customer'] || data['CUSTOMER'] || "-";
+                    document.getElementById('displayTruck').innerText = data['Truck'] || data['TRUCK'] || data['PLAT NOMOR'] || "-";
                     
                     document.getElementById('loader').classList.add('hidden');
                     document.getElementById('formContainer').classList.remove('hidden');
                 } else {
-                    document.getElementById('loader').innerHTML = "<p class='text-slate-400 uppercase font-bold text-sm'>Data Tidak Ditemukan</p>";
+                    document.getElementById('loader').innerHTML = "<p class='text-slate-400 uppercase font-bold text-sm'>Data Tidak Ditemukan di Database</p>";
                 }
             } catch (error) {
-                console.error(error);
-                alert("Gagal koneksi ke database.");
+                console.error("Firebase Error:", error);
+                document.getElementById('loader').innerHTML = "<p class='text-red-500 font-bold'>GAGAL KONEKSI DATABASE</p>";
             }
         }
 
         async function submitUpdate() {
+            const selectedID = document.getElementById('selectTicket').value; // Ambil ID yang dipilih di dropdown
             const eta = document.getElementById('inputEta').value;
             const note = document.getElementById('inputNote').value;
             const extra = document.getElementById('additionalNote').value;
@@ -139,8 +146,8 @@
             if (!eta) return alert("Mohon isi jam estimasi tiba!");
 
             try {
-                // Simpan respon ke dokumen yang sama
-                await db.collection("vendor_updates").doc(deliveryID).update({
+                // Gunakan String(selectedID) untuk memastikan kecocokan ID di Firestore
+                await db.collection("vendor_updates").doc(String(selectedID)).update({
                     estimasi_tiba: eta,
                     catatan_vendor: note,
                     catatan_tambahan: extra,
@@ -150,7 +157,8 @@
                 document.getElementById('formContainer').classList.add('hidden');
                 document.getElementById('successState').classList.remove('hidden');
             } catch (error) {
-                alert("Gagal mengirim data. Silakan coba lagi.");
+                console.error("Update Error:", error);
+                alert("Gagal mengirim data. Pastikan ID Ticket sesuai.");
             }
         }
     </script>
