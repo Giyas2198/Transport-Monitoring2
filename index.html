@@ -83,18 +83,22 @@
                 </div>
                 
                 <div class="flex items-center gap-3">
-                    <div id="vendorFilterContainer" class="hidden">
-                        <select id="vendorDropdown" onchange="filterByVendor()" class="bg-slate-800 text-white text-[11px] font-bold px-4 py-2.5 rounded-xl border border-slate-700 focus:border-blue-500 outline-none cursor-pointer">
-                            <option value="">SEMUA TRANSPORTER</option>
-                        </select>
-                    </div>
+                      <div id="vendorActionContainer" class="hidden flex items-center gap-2">
+    <select id="waGroupSelect" class="bg-emerald-700 text-white text-[11px] font-bold px-3 py-2.5 rounded-xl border border-emerald-600 outline-none cursor-pointer">
+        <option value="120363404363976700@g.us">GROUP: Wira</option>
+        <option value="120363071747934145@g.us">GROUP: Respex</option>
+        <option value="6282135357171-1536552759@g.us">GROUP: Humala</option>
+        <option value="120363417328296675@g.us">GROUP: Abs</option>
+        <option value="6287853314430-1557823209@g.us">GROUP: Yas Trans</option>
+        <option value="120363407860693296@g.us">GROUP: Eltrans</option>
+        <option value="120363423423967682@g.us">GROUP: Maersk</option>
+        <option value="120363226867442337@g.us" selected>GROUP: Testing</option>
+    </select>
 
-                    <button id="sendVendorBtn" onclick="pushToVendor()" class="hidden bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2.5 rounded-xl font-black text-xs transition-all shadow-lg">
-                        KIRIM KE VENDOR (FONNTE)
-                    </button>
-                    
-                    <button onclick="closeModal()" class="text-3xl text-slate-500 hover:text-red-500 ml-4">&times;</button>
-                </div>
+    <button id="sendVendorBtn" onclick="pushToVendor()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2.5 rounded-xl font-black text-xs transition-all shadow-lg">
+        KIRIM WA
+    </button>
+</div>    
             </div>
             <div class="flex-1 overflow-auto p-4">
                 <table id="mainTable" class="w-full text-[11px] text-left border-collapse">
@@ -307,39 +311,37 @@ async function pushToVendor() {
     
     if (visibleRows.length === 0) return alert("Pilih data yang ingin dikirim!");
     
-    const vendorName = document.getElementById('vendorDropdown').value || "MAERSK";
+    // AMBIL TARGET WA DARI DROPDOWN GRUP
+    const waTarget = document.getElementById('waGroupSelect').value;
+    const vendorName = document.getElementById('vendorDropdown').value || "GENERAL";
     
-    if (!confirm(`Kirim reminder untuk ${visibleRows.length} tiket ke vendor ${vendorName}?`)) return;
+    if (!confirm(`Kirim reminder ke grup WA yang dipilih?`)) return;
 
     let message = `⚠️ *REMINDER PENGIRIMAN TMS*\n`;
     message += `━━━━━━━━━━━━━━━━━━━━\n`;
     message += `*Vendor:* ${vendorName}\n`;
     message += `*Status:* ON_DELIVERY\n`;
-    message += `*Tgl:* ${new Date().toLocaleDateString('id-ID')}\n`;
     message += `━━━━━━━━━━━━━━━━━━━━\n\n`;
-    message += `Halo Driver/Vendor, mohon update estimasi tiba (ETA) pada link di bawah ini karena status pada tms masih on delivery mohon update yah. terlampir beberapa pengiriman yg belum sampai:\n\n`;
+    message += `Halo Driver/Vendor, mohon update estimasi tiba (ETA) pada link di bawah ini:\n\n`;
 
     let ticketList = [];
-    let idArray = []; // Untuk menampung ID tanpa format teks WA
+    let idArray = [];
 
     for (let el of visibleRows) {
         const rowData = JSON.parse(el.getAttribute('data-row'));
         const ticketID = rowData['Delivery Ticket'] || rowData['DELIVERY TICKET'] || rowData['DEL NOTE NO'];
         
-        // Simpan ke Firestore
         await db.collection("vendor_updates").doc(String(ticketID)).set({ 
             ...rowData, 
             last_notified: firebase.firestore.FieldValue.serverTimestamp() 
         }, { merge: true });
 
         ticketList.push(`DT *${ticketID}*`);
-        idArray.push(ticketID); // Masukkan ID murni ke array untuk link
+        idArray.push(ticketID);
     }
 
-    // Gabungkan nomor tiket untuk tampilan pesan
     message += ticketList.join(" | ");
     
-    // PERBAIKAN LINK: Gabungkan semua ID dengan koma
     const currentUrl = window.location.href.replace('index.html', '');
     const allIDs = idArray.join(',');
     const linkRespon = `${currentUrl}respon.html?ids=${allIDs}`;
@@ -347,22 +349,22 @@ async function pushToVendor() {
     message += `\n\n🔗 *Update di sini:* ${linkRespon}\n`;
     message += `\n━━━━━━━━━━━━━━━━━━━━`;
 
-    // Panggil fungsi kirim
-    sendToFonnte(message);
+    // KIRIM DENGAN TARGET YANG DINAMIS
+    sendToFonnte(message, waTarget);
 }
-        function sendToFonnte(msg) {
-            const fd = new FormData(); 
-            fd.append("target", WA_TARGET); 
-            fd.append("message", msg);
-            
-            fetch("https://api.fonnte.com/send", { 
-                method: 'POST', 
-                headers: { "Authorization": FONNTE_TOKEN }, 
-                body: fd 
-            })
-            .then(() => { alert("WA Berhasil Dikirim!"); closeModal(); })
-            .catch(() => alert("Gagal Kirim Fonnte!"));
-        }
+function sendToFonnte(msg, target) {
+    const fd = new FormData(); 
+    fd.append("target", target); // Menggunakan target dari dropdown
+    fd.append("message", msg);
+    
+    fetch("https://api.fonnte.com/send", { 
+        method: 'POST', 
+        headers: { "Authorization": FONNTE_TOKEN }, 
+        body: fd 
+    })
+    .then(() => { alert("WA Berhasil Dikirim ke Grup!"); closeModal(); })
+    .catch(() => alert("Gagal Kirim Fonnte!"));
+}
 
         function toggleAllRows(s) { 
             // Hanya mencentang baris yang tidak disembunyikan oleh filter
@@ -428,6 +430,7 @@ async function toggleResponse(cardId, ticketIDs) {
 </body>
 
 </html>
+
 
 
 
